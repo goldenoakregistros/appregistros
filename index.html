@@ -1,0 +1,280 @@
+    <!DOCTYPE html>
+<html>
+<head>
+    <title>Lector de QR para Registro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="css/tailwind.min.css" rel="stylesheet">
+    <script src="js/html5-qrcode.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .scanner-container { width: 100%; max-width: 500px; margin: auto; }
+        #reader { border: 2px solid #3b82f6; border-radius: 1rem; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08); }
+    </style>
+
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-xl text-center">
+        <!-- Pantalla de bienvenida -->
+        <div id="welcome-screen">
+            <h1 class="text-3xl font-extrabold text-blue-600 mb-4">Selecciona una Opción</h1>
+            <p class="text-gray-600 mb-6">Elige si vas a registrar una entrada o una salida.</p>
+            <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                <button id="entryButton" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform active:scale-95 shadow-lg">
+                    Entrada
+                </button>
+                <button id="exitButton" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform active:scale-95 shadow-lg">
+                    Salida
+                </button>
+            </div>
+        </div>
+
+        <!-- Pantalla del escáner -->
+        <div id="scanner-screen" class="hidden">
+            <h1 class="text-3xl font-extrabold text-blue-600 mb-4">Lector de QR</h1>
+            <p class="text-gray-600 mb-6">Escanea el código QR de un trabajador para registrar su asistencia.</p>
+
+            <div class="space-y-4">
+                <div id="reader" class="scanner-container"></div>
+                <div id="result" class="min-h-12 flex items-center justify-center">
+                    <p id="statusMessage" class="text-lg font-semibold text-gray-500">Esperando escaneo...</p>
+                </div>
+                <button id="toggleButton" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform active:scale-95 shadow-lg">
+                    Iniciar Escáner
+                </button>
+                <button id="backButton" class="w-full bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform active:scale-95 shadow-lg mt-2">
+                    Volver
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        // document.addEventListener("DOMContentLoaded", () => {
+        //   if (window.Capacitor) {
+        //     console.log("✅ Capacitor disponible:", window.Capacitor);
+        //     alert("Capacitor está funcionando en la app");
+        //   } else {
+        //     console.log("⚠️ Capacitor NO detectado (estás en navegador)");
+        //     alert("Estás en navegador, no en la app");
+        //   }
+        // });
+
+        const workers = {
+            "W001": "Juan Pérez", "W002": "María Soto", "W003": "Carlos Rivas", "W004": "Ana López", "W005": "Pedro González",
+            "GO001": "Orlando Jimenez Neipan", "GO002": "José Manuel López Damian", "GO003": "Omar Enrique Cáceres Rojas", "GO004": "Juan Jose Oyarzun Navarrete", 
+            "GO005": "Cristóbal Valencia Nuñez", "GO006": "Felipe Hernán Vergara Zúñiga", "GO007": "Juan Antonio Olmedo Campos ", "GO008": "Fernando Humberto  Rosas Hermosilla",
+            "GO009": "Jonathan Deybby Rojo Órdenes", "GO010": "Andres Muñoz Riquelme"
+        };
+
+        const html5QrCode = new Html5Qrcode("reader");
+        const welcomeScreen = document.getElementById("welcome-screen");
+        const scannerScreen = document.getElementById("scanner-screen");
+        const statusMessage = document.getElementById("statusMessage");
+        const toggleButton = document.getElementById("toggleButton");
+        const backButton = document.getElementById("backButton");
+        const entryButton = document.getElementById("entryButton");
+        const exitButton = document.getElementById("exitButton");
+        let isScanning = false;
+        let entryType = '';
+
+        //aca puse la parte nueva del permiso
+        async function ensureCameraPermission() {
+            if (window.Capacitor && window.Capacitor.Plugins) {
+                const { Permissions } = window.Capacitor.Plugins;
+
+                try {
+                // Verificar si ya está concedido
+                const status = await Permissions.query({ name: 'camera' });
+                if (status.state !== 'granted') {
+                    // Pedir permiso
+                    const result = await Permissions.request({ name: 'camera' });
+                    if (result.state !== 'granted') {
+                    alert("No se concedió el permiso de cámara. No se puede usar el escáner.");
+                    return false;
+                    }
+                }
+                return true;
+                } catch (err) {
+                console.warn("Error comprobando permisos:", err);
+                return true; // fallback: intentarlo igual
+                }
+            } else {
+                // Si no está en Capacitor (ej. navegador), seguimos normal
+                return true;
+            }
+            }
+
+
+        // ⚡ Tu URL de Google Script
+        const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyu4rcq-7g-1nOwQHcAgjuku_2kuErsHRegMzBwq51jq08ygZvGMIMGtuW1WjvqhHWO6g/exec';
+
+        const showWelcomeScreen = () => {
+            scannerScreen.classList.add('hidden');
+            welcomeScreen.classList.remove('hidden');
+            updateStatus("Esperando escaneo...");
+            if (isScanning) {
+                html5QrCode.stop().catch(console.error);
+                isScanning = false;
+            }
+        };
+
+        const showScannerScreen = (type) => {
+            entryType = type;
+            welcomeScreen.classList.add('hidden');
+            scannerScreen.classList.remove('hidden');
+            startScanner();
+        };
+
+        function updateStatus(message, type = 'info') {
+            statusMessage.textContent = message;
+            statusMessage.className = 'text-lg font-semibold';
+            if (type === 'success') {
+                statusMessage.classList.add('text-green-600');
+            } else if (type === 'error') {
+                statusMessage.classList.add('text-red-600');
+            } else {
+                statusMessage.classList.add('text-gray-500');
+            }
+        }
+
+        const onScanSuccess = (decodedText) => {
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                toggleButton.textContent = "Iniciar Escáner";
+            }).catch(console.error);
+
+            const workerId = decodedText;
+            const workerName = workers[workerId];
+
+            if (workerName) {
+                const data = {
+                    worker_id: workerId,
+                    nombre: workerName,
+                    tipo_registro: entryType,
+                    timestamp: new Date().toISOString()
+                };
+
+                // 👉 Flujo doble: si existe SQLite (Capacitor) lo usamos, si no hacemos fetch normal
+                if (window.CapacitorSQLite) {
+                    saveToSQLite(data).then(() => {
+                        updateStatus(`Registro guardado localmente para ${workerName}`, "success");
+                        trySync();
+                    }).catch(err => {
+                        updateStatus("Error al guardar localmente", "error");
+                        console.error(err);
+                    });
+                } else {
+                    // Modo navegador normal (fetch directo como antes)
+                    fetch(GOOGLE_SHEETS_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    }).then(() => {
+                        updateStatus(`Registro enviado para ${workerName}`, "success");
+                    }).catch(err => {
+                        updateStatus("Error al enviar", "error");
+                        console.error(err);
+                    });
+                }
+
+                setTimeout(startScanner, 3000);
+            } else {
+                updateStatus("QR no reconocido. Intenta con otro.", "error");
+                setTimeout(startScanner, 3000);
+            }
+        };
+
+        const onScanFailure = (error) => { /* Ignorar errores */ };
+
+        const startScanner = () => {
+            if (isScanning) return;
+            isScanning = true;
+            toggleButton.textContent = "Detener Escáner";
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                onScanSuccess,
+                onScanFailure
+            ).then(() => {
+                updateStatus("Escáner listo. ¡Apunta a un QR!");
+            }).catch(err => {
+                console.error("Error al iniciar la cámara:", err);
+                updateStatus("Error: No se pudo acceder a la cámara.", "error");
+                isScanning = false;
+            });
+        };
+
+        const stopScanner = () => {
+            if (!isScanning) return;
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                toggleButton.textContent = "Iniciar Escáner";
+                updateStatus("Escáner detenido.");
+            }).catch(err => {
+                console.error("Error al detener el escáner:", err);
+            });
+        };
+
+        toggleButton.addEventListener('click', () => {
+            if (isScanning) { stopScanner(); } else { startScanner(); }
+        });
+        entryButton.addEventListener('click', () => showScannerScreen('Entrada'));
+        exitButton.addEventListener('click', () => showScannerScreen('Salida'));
+        backButton.addEventListener('click', showWelcomeScreen);
+
+        // 🗄️ Funciones para modo SQLite (solo funcionan en Capacitor)
+        async function saveToSQLite(record) {
+            const { CapacitorSQLite } = window;
+            const db = await CapacitorSQLite.createConnection({ database: "asistencia", version: 1 });
+            await db.open();
+            await db.execute(`
+                CREATE TABLE IF NOT EXISTS registros (
+                    id TEXT PRIMARY KEY,
+                    worker_id TEXT,
+                    nombre TEXT,
+                    tipo_registro TEXT,
+                    timestamp TEXT,
+                    synced INTEGER
+                )
+            `);
+            const id = Date.now().toString();
+            await db.run(
+                "INSERT INTO registros (id, worker_id, nombre, tipo_registro, timestamp, synced) VALUES (?,?,?,?,?,?)",
+                [id, record.worker_id, record.nombre, record.tipo_registro, record.timestamp, 0]
+            );
+            await db.close();
+        }
+
+        async function trySync() {
+            const { CapacitorSQLite } = window;
+            const db = await CapacitorSQLite.createConnection({ database: "asistencia", version: 1 });
+            await db.open();
+            const res = await db.query("SELECT * FROM registros WHERE synced = 0");
+            if (!res.values.length) {
+                await db.close();
+                return;
+            }
+            try {
+                const response = await fetch(GOOGLE_SHEETS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entries: res.values })
+                });
+                const result = await response.json();
+                if (result.status === "ok") {
+                    await db.run("UPDATE registros SET synced = 1 WHERE synced = 0");
+                }
+            } catch (err) {
+                console.error("Error sincronizando:", err);
+            }
+            await db.close();
+        }
+    </script>
+</body>
+</html>
+
+
