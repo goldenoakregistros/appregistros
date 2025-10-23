@@ -62,13 +62,44 @@
         //   }
         // });
 
-        const workers = {
-            "W001": "Juan Pérez", "W002": "María Soto", "W003": "Carlos Rivas", "W004": "Ana López", "W005": "Pedro González",
-            "GO001": "Orlando Jimenez Neipan", "GO002": "José Manuel López Damian", "GO003": "Omar Enrique Cáceres Rojas", "GO004": "Juan Jose Oyarzun Navarrete", 
-            "GO005": "Cristóbal Valencia Nuñez", "GO006": "Felipe Hernán Vergara Zúñiga", "GO007": "Juan Antonio Olmedo Campos ", "GO008": "Fernando Humberto  Rosas Hermosilla",
-            "GO009": "Jonathan Deybby Rojo Órdenes", "GO010": "Andres Muñoz Riquelme", "GO011": "Andrés Puliodo Fuentes", "GO012": "Luis Humberto Correa Palacios",
-            "GO013": "Manuel Alejandro Pizarro Naranjo", "GO014": "Lazlo Ignacio Ramos Aguilera", "GO015": "Pablo Igor Villagran Cerda", "GO016": "Daniel Alejandro Aros Encina"
-        };
+        // const workers = {
+        //     "W001": "Juan Pérez", "W002": "María Soto", "W003": "Carlos Rivas", "W004": "Ana López", "W005": "Pedro González",
+        //     "GO001": "Orlando Jimenez Neipan", "GO002": "José Manuel López Damian", "GO003": "Omar Enrique Cáceres Rojas", "GO004": "Juan Jose Oyarzun Navarrete", 
+        //     "GO005": "Cristóbal Valencia Nuñez", "GO006": "Felipe Hernán Vergara Zúñiga", "GO007": "Juan Antonio Olmedo Campos ", "GO008": "Fernando Humberto  Rosas Hermosilla",
+        //     "GO009": "Jonathan Deybby Rojo Órdenes", "GO010": "Andres Muñoz Riquelme", "GO011": "Andrés Puliodo Fuentes", "GO012": "Luis Humberto Correa Palacios",
+        //     "GO013": "Manuel Alejandro Pizarro Naranjo", "GO014": "Lazlo Ignacio Ramos Aguilera", "GO015": "Pablo Igor Villagran Cerda", "GO016": "Daniel Alejandro Aros Encina"
+        // };
+
+        // Variable global para los trabajadores
+        let workers = {};
+
+        // Función para cargar la lista de trabajadores desde GitHub
+        async function loadWorkers() {
+        try {
+            const response = await fetch("https://raw.githubusercontent.com/goldenoakregistros/appregistros/main/listado.json?cache_bust=" + new Date().getTime());
+            if (!response.ok) throw new Error("No se pudo obtener el archivo JSON");
+            workers = await response.json();
+            console.log("Trabajadores cargados desde GitHub:", workers);
+
+            // Guarda una copia local (por si no hay internet después)
+            localStorage.setItem("workers", JSON.stringify(workers));
+
+        } catch (error) {
+            console.error("Error cargando trabajadores:", error);
+            
+            // Si no hay internet, usa la versión cacheada
+            const cachedWorkers = localStorage.getItem("workers");
+            if (cachedWorkers) {
+            workers = JSON.parse(cachedWorkers);
+            console.log("Trabajadores cargados desde cache:", workers);
+            } else {
+            alert("No hay conexión y no existen trabajadores guardados localmente.");
+            }
+        }
+        }
+
+        // Llamar a la función al iniciar la página
+        loadWorkers();
 
         const html5QrCode = new Html5Qrcode("reader");
         const welcomeScreen = document.getElementById("welcome-screen");
